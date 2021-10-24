@@ -5,16 +5,18 @@ import (
 	"net"
 )
 
+type ClientConnectionSet map[*ClientConnection]interface{}
+
 type Server struct {
 	listener net.Listener
 	pubsub   *PubSub
-	clients map[*ClientConnection]interface{}
+	clients  ClientConnectionSet
 }
 
 func NewServer() *Server {
 	return &Server{
-		pubsub: NewPubSub(),
-		clients: make(map[*ClientConnection]interface{}),
+		pubsub:  NewPubSub(),
+		clients: make(ClientConnectionSet),
 	}
 }
 
@@ -29,11 +31,12 @@ func (s *Server) Listen(port int) error {
 	} else {
 		fmt.Printf("Listening on port %d...\n", port)
 		s.listener = listener
-		s.doWork() // block until Server is closed
+		s.acceptConnections() // block until Server is closed
 		return nil
 	}
 }
 
+// Close shuts down listener
 func (s *Server) Close() error {
 	if s.listener != nil {
 		return s.listener.Close()
@@ -41,7 +44,7 @@ func (s *Server) Close() error {
 	return nil
 }
 
-func (s *Server) doWork() {
+func (s *Server) acceptConnections() {
 	for {
 		if conn, err := s.listener.Accept(); err != nil {
 			return
@@ -54,11 +57,15 @@ func (s *Server) doWork() {
 }
 
 func (s *Server) newClient(conn net.Conn) *ClientConnection {
-	client := newClient(conn, s.pubsub, s.removeClient)
-	s.clients[client] = nil
+	client := newClient(conn, s.pubsub, s.clients.untrack)
+	s.clients.track(client)
 	return client
 }
 
-func (s *Server) removeClient(client *ClientConnection) {
-	delete(s.clients, client)
+func (c ClientConnectionSet) track(client *ClientConnection) {
+	c[client] = nil
+}
+
+func (c ClientConnectionSet) untrack(client *ClientConnection) {
+	delete(c, client)
 }

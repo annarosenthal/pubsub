@@ -40,6 +40,6 @@ func (p *PubSub) Subscribe(topic string) *Subscription {
 
 func (p *PubSub) unsubscribe(subscription *Subscription) {
 	if subscriptions, ok := p.subscriptions[subscription.Topic()]; ok {
-		delete(subscriptions,subscription)
+		delete(subscriptions, subscription)
 	}
 }

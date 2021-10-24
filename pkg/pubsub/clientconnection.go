@@ -7,37 +7,33 @@ import (
 	"os"
 	"runtime"
 	"strings"
-	"sync"
 )
 
 type ClientConnection struct {
-	connection net.Conn
-	pubsub *PubSub
-	removeClient func(*ClientConnection)
-	rw *bufio.ReadWriter
-	lock *sync.Mutex //todo, benchmarking, unit tests
+	connection    net.Conn
+	pubsub        *PubSub
+	onClose       func(*ClientConnection)
+	rw            *bufio.ReadWriter
 	subscriptions map[*Subscription]interface{}
+	channel 	  chan string
 }
 
-func newClient(connection net.Conn, pubsub *PubSub, removeClient func(*ClientConnection)) *ClientConnection {
+func newClient(connection net.Conn, pubsub *PubSub, onClose func(*ClientConnection)) *ClientConnection {
 	return &ClientConnection{
 		connection,
 		pubsub,
-		removeClient,
+		onClose,
 		bufio.NewReadWriter(bufio.NewReader(connection), bufio.NewWriter(connection)),
-		&sync.Mutex{},
 		make(map[*Subscription]interface{}),
+		make(chan string),
 	}
 }
 
-func (c *ClientConnection) Run() {
-	c.receive()
-}
-
-func (c *ClientConnection) receive() {
+func (c *ClientConnection) Run() error {
+	go c.sender()
 	for {
 		if bytes, _, err := c.rw.ReadLine(); err != nil {
-			c.Close()
+			return c.Close()
 		} else {
 			line := string(bytes)
 			c.handleCommand(line)
@@ -46,9 +42,6 @@ func (c *ClientConnection) receive() {
 }
 
 func (c *ClientConnection) handleCommand(line string) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
 	parts := strings.SplitN(line, " ", 3)
 
 	if len(parts) == 0 {
@@ -117,30 +110,39 @@ func (c *ClientConnection) handleStatsCommand() {
 }
 
 func (c *ClientConnection) handleQuitCommand() {
-	c.Close()
+	c.connection.Close()
 }
 
 func (c *ClientConnection) listenForMessages(subscription *Subscription) {
 	for {
-		if message, ok := <- subscription.Channel(); !ok {
+		if message, ok := <-subscription.Channel(); !ok {
 			return
 		} else {
-			c.lock.Lock()
 			c.send("[%s] %s", subscription.Topic(), message)
-			c.lock.Unlock()
 		}
 	}
 }
 
 func (c *ClientConnection) send(format string, args ...interface{}) {
-	_, _ = c.rw.WriteString(fmt.Sprintln(fmt.Sprintf(format, args...)))
-	_ = c.rw.Flush()
+	c.channel <- fmt.Sprintln(fmt.Sprintf(format, args...))
+}
+
+func (c *ClientConnection) sender() {
+	for {
+		if message, ok := <- c.channel; !ok {
+			return
+		} else {
+			_, _ = c.rw.WriteString(message)
+			_ = c.rw.Flush()
+		}
+	}
 }
 
 func (c *ClientConnection) Close() error {
-	c.removeClient(c)
+	c.onClose(c)
 	for subscription := range c.subscriptions {
 		subscription.Close()
 	}
+	close(c.channel)
 	return c.connection.Close()
 }
