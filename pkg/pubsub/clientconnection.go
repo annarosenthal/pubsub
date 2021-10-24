@@ -5,36 +5,39 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 )
 
-type Client struct {
+type ClientConnection struct {
 	connection net.Conn
 	pubsub *PubSub
-	removeClient func(*Client)
+	removeClient func(*ClientConnection)
 	rw *bufio.ReadWriter
 	lock *sync.Mutex //todo, benchmarking, unit tests
+	subscriptions map[*Subscription]interface{}
 }
 
-func newClient(connection net.Conn, pubsub *PubSub, removeClient func(*Client)) *Client {
-	return &Client{
+func newClient(connection net.Conn, pubsub *PubSub, removeClient func(*ClientConnection)) *ClientConnection {
+	return &ClientConnection{
 		connection,
 		pubsub,
 		removeClient,
 		bufio.NewReadWriter(bufio.NewReader(connection), bufio.NewWriter(connection)),
 		&sync.Mutex{},
+		make(map[*Subscription]interface{}),
 	}
 }
 
-func (c *Client) Run() {
+func (c *ClientConnection) Run() {
 	c.receive()
 }
 
-func (c *Client) receive() {
+func (c *ClientConnection) receive() {
 	for {
 		if bytes, _, err := c.rw.ReadLine(); err != nil {
-			return
+			c.Close()
 		} else {
 			line := string(bytes)
 			c.handleCommand(line)
@@ -42,7 +45,7 @@ func (c *Client) receive() {
 	}
 }
 
-func (c *Client) handleCommand(line string) {
+func (c *ClientConnection) handleCommand(line string) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -66,12 +69,19 @@ func (c *Client) handleCommand(line string) {
 	case "kill":
 		c.handleKillCommand()
 		return
-	}
 
+	case "stats":
+		c.handleStatsCommand()
+		return
+
+	case "quit":
+		c.handleQuitCommand()
+		return
+	}
 	c.send("unknown command '%s'", command)
 }
 
-func (c *Client) handlePublishCommand(parts []string) {
+func (c *ClientConnection) handlePublishCommand(parts []string) {
 	if len(parts) < 3 {
 		c.send("expected: pub [topic] [message]")
 		return
@@ -85,7 +95,7 @@ func (c *Client) handlePublishCommand(parts []string) {
 	c.send("published to topic [%s]", topic)
 }
 
-func (c *Client) handleSubscribeCommand(parts []string) {
+func (c *ClientConnection) handleSubscribeCommand(parts []string) {
 	if len(parts) < 2 {
 		c.send("expected: sub [topic]")
 		return
@@ -93,15 +103,24 @@ func (c *Client) handleSubscribeCommand(parts []string) {
 
 	topic := parts[1]
 	subscription := c.pubsub.Subscribe(topic)
+	c.subscriptions[subscription] = nil
 	go c.listenForMessages(subscription)
 	c.send("subscribed to topic [%s]", topic)
 }
 
-func (c *Client) handleKillCommand() {
+func (c *ClientConnection) handleKillCommand() {
 	os.Exit(0)
 }
 
-func (c *Client) listenForMessages(subscription *Subscription) {
+func (c *ClientConnection) handleStatsCommand() {
+	c.send("num go routines=%d", runtime.NumGoroutine())
+}
+
+func (c *ClientConnection) handleQuitCommand() {
+	c.Close()
+}
+
+func (c *ClientConnection) listenForMessages(subscription *Subscription) {
 	for {
 		if message, ok := <- subscription.Channel(); !ok {
 			return
@@ -113,12 +132,15 @@ func (c *Client) listenForMessages(subscription *Subscription) {
 	}
 }
 
-func (c *Client) send(format string, args ...interface{}) {
+func (c *ClientConnection) send(format string, args ...interface{}) {
 	_, _ = c.rw.WriteString(fmt.Sprintln(fmt.Sprintf(format, args...)))
 	_ = c.rw.Flush()
 }
 
-func (c *Client) Close() error {
+func (c *ClientConnection) Close() error {
 	c.removeClient(c)
+	for subscription := range c.subscriptions {
+		subscription.Close()
+	}
 	return c.connection.Close()
 }

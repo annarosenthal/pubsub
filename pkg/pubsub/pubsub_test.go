@@ -30,7 +30,7 @@ func TestPubSub_Publish(t *testing.T) {
 	assert.Equal(t, Message, message)
 }
 
-func TestPubSub_PublishCloseAndPublish(t *testing.B) {
+func TestPubSub_PublishCloseAndPublish(t *testing.T) {
 	pubsub := NewPubSub()
 
 	subscription := pubsub.Subscribe(Topic)

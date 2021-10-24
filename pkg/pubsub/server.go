@@ -8,13 +8,13 @@ import (
 type Server struct {
 	listener net.Listener
 	pubsub   *PubSub
-	clients map[*Client]interface{}
+	clients map[*ClientConnection]interface{}
 }
 
 func NewServer() *Server {
 	return &Server{
 		pubsub: NewPubSub(),
-		clients: make(map[*Client]interface{}),
+		clients: make(map[*ClientConnection]interface{}),
 	}
 }
 
@@ -53,12 +53,12 @@ func (s *Server) doWork() {
 	}
 }
 
-func (s *Server) newClient(conn net.Conn) *Client {
+func (s *Server) newClient(conn net.Conn) *ClientConnection {
 	client := newClient(conn, s.pubsub, s.removeClient)
 	s.clients[client] = nil
 	return client
 }
 
-func (s *Server) removeClient(client *Client) {
+func (s *Server) removeClient(client *ClientConnection) {
 	delete(s.clients, client)
 }
