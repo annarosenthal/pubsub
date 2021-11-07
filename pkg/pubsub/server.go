@@ -13,27 +13,23 @@ type Server struct {
 	clients  ClientConnectionSet
 }
 
-func NewServer() *Server {
-	return &Server{
-		pubsub:  NewPubSub(),
-		clients: make(ClientConnectionSet),
+func NewServer(port int) (*Server, error) {
+	if listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port)); err != nil {
+		return nil, err
+	} else {
+		return &Server{
+			listener,
+			NewPubSub(),
+			make(ClientConnectionSet),
+		}, nil
 	}
 }
 
-// Listen listens for new connections and processes commands from them, blocking until the Server is closed
-func (s *Server) Listen(port int) error {
-	if s.listener != nil {
-		return fmt.Errorf("already listening")
-	}
 
-	if listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port)); err != nil {
-		return err
-	} else {
-		fmt.Printf("Listening on port %d...\n", port)
-		s.listener = listener
-		s.acceptConnections() // block until Server is closed
-		return nil
-	}
+// Listen listens for new connections and processes commands from them
+func (s *Server) Listen() {
+	fmt.Printf("Listening on %s...\n", s.listener.Addr().String())
+	s.acceptConnections()
 }
 
 // Close shuts down listener

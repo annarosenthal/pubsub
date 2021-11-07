@@ -6,11 +6,11 @@ import (
 )
 
 const Topic = "topic"
-const Message = "message"
+const TestMessage = "message"
 
 func TestPubSub_PublishError(t *testing.T) {
 	pubsub := NewPubSub()
-	err := pubsub.Publish(Topic, Message)
+	err := pubsub.Publish(Topic, TestMessage)
 	assert.NotNil(t, err)
 }
 
@@ -20,13 +20,13 @@ func TestPubSub_Publish(t *testing.T) {
 	assert.NotNil(t, subscription)
 
 	go func() {
-		err := pubsub.Publish(Topic, Message)
+		err := pubsub.Publish(Topic, TestMessage)
 		assert.Nil(t, err)
 	}()
 
 	message, ok := <-subscription.Channel()
 	assert.True(t, ok)
-	assert.Equal(t, Message, message)
+	assert.Equal(t, TestMessage, message)
 }
 
 func TestPubSub_PublishCloseAndPublish(t *testing.T) {
@@ -37,7 +37,7 @@ func TestPubSub_PublishCloseAndPublish(t *testing.T) {
 	_ = subscription.Close()
 
 	go func() {
-		err := pubsub.Publish(Topic, Message)
+		err := pubsub.Publish(Topic, TestMessage)
 		assert.NotNil(t, err)
 	}()
 
@@ -47,15 +47,15 @@ func TestPubSub_PublishCloseAndPublish(t *testing.T) {
 
 func benchmarkPubSub_Publish(num int, b *testing.B) {
 	pubsub := NewPubSub()
-	subscriptions := make([] *Subscription, num)
+	subscriptions := make([]*Subscription, num)
 
-	for i:=0; i < num; i++ {
+	for i := 0; i < num; i++ {
 		subscription := pubsub.Subscribe(Topic)
 		subscriptions[i] = subscription
 
 		go func() {
 			for {
-				if _, ok := <- subscription.channel; !ok {
+				if _, ok := <-subscription.channel; !ok {
 					return
 				}
 			}
@@ -64,8 +64,8 @@ func benchmarkPubSub_Publish(num int, b *testing.B) {
 
 	b.ResetTimer()
 
-	for i:=0; i < b.N; i++ {
-		_ = pubsub.Publish(Topic, Message)
+	for i := 0; i < b.N; i++ {
+		_ = pubsub.Publish(Topic, TestMessage)
 	}
 
 	b.StopTimer()
@@ -73,7 +73,6 @@ func benchmarkPubSub_Publish(num int, b *testing.B) {
 		subscription.Close()
 	}
 }
-
 
 func BenchmarkPubSub_Publish10(b *testing.B) {
 	benchmarkPubSub_Publish(1000, b)
