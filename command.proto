@@ -1,0 +1,15 @@
+syntax = "proto3";
+package pubsub;
+
+option go_package = "gen/pubsub";
+
+message Command {
+  enum Action {
+    PUB = 0;
+    SUB = 1;
+  }
+
+  Action action = 1;
+  string topic = 2;
+  string message = 3;
+}

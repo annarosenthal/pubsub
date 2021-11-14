@@ -1,6 +1,7 @@
 package pubsub
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -37,23 +38,28 @@ func TestMain(m *testing.M) {
 func TestClient_Subscribe_Publish(t *testing.T) {
 	err := client.Subscribe("topic")
 	assert.NoError(t, err)
+	assertMessage(t, "info", "subscribed to topic [topic]")
+
 	err = client.Publish("topic", "message")
 	assert.NoError(t, err)
+	assertMessage(t, "info", "published to topic [topic]")
 
-	msg := readMessage()
-	assert.Equal(t, "topic", msg.Topic)
-	assert.Equal(t, "message", msg.Text)
+	assertMessage(t, Topic, TestMessage)
 }
 
 func TestClient_Subscribe_Publish_WrongTopic(t *testing.T) {
 	err := client.Subscribe("topic")
 	assert.NoError(t, err)
+	assertMessage(t, "info", "subscribed to topic [topic]")
+
 	err = client.Publish("wrong", "message")
 	assert.NoError(t, err)
+	assertMessage(t, "error", "failed to publish to topic wrong because there are no subscribers")
 
 	select {
-	case <-client.Messages():
+	case msg := <-client.Messages():
 		assert.Fail(t, "didn't expect a message")
+		fmt.Printf("%+v", msg)
 	case <-time.After(100 * time.Millisecond): // how can we not make it flakey
 	}
 }
@@ -65,4 +71,10 @@ func readMessage() *Message {
 	case <-time.After(2 * time.Second):
 		panic("timed out waiting for a message")
 	}
+}
+
+func assertMessage(t *testing.T, topic string, message string) {
+	msg := readMessage()
+	assert.Equal(t, topic, msg.Topic)
+	assert.Equal(t, message, msg.Text)
 }
