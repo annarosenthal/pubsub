@@ -8,10 +8,6 @@ message SubscribeRequest {
 }
 
 message Message {
-  string message = 1;
-}
-
-message PublishRequest {
   string topic = 1;
   string message = 2;
 }
@@ -22,8 +18,12 @@ message PublishResponse {
 message SubscribeResponse {
 }
 
+message ReceiveMessagesRequest {
+}
+
 service PubSub {
-  rpc Subscribe(SubscribeRequest) returns (Su Message) {}
-  rpc Publish(PublishRequest) returns (PublishResponse) {}
+  rpc Subscribe(SubscribeRequest) returns (SubscribeResponse) {}
+  rpc Publish(Message) returns (PublishResponse) {}
+  rpc ReceiveMessages(ReceiveMessagesRequest) returns (stream Message) {}
 }
 

@@ -14,6 +14,7 @@ type Server struct {
 	pubsub.UnimplementedPubSubServer
 	listener net.Listener
 	pubsub   *PubSub
+	messages   chan *pubsub.Message
 }
 
 func NewServer(port int) (*Server, error) {
@@ -24,6 +25,7 @@ func NewServer(port int) (*Server, error) {
 			pubsub.UnimplementedPubSubServer{},
 			listener,
 			NewPubSub(),
+			make(chan *pubsub.Message),
 		}, nil
 	}
 }
@@ -44,7 +46,7 @@ func (s *Server) Close() error {
 	return nil
 }
 
-func (s * Server) Subscribe(request *pubsub.SubscribeRequest, response pubsub.PubSub_SubscribeServer) error {
+func (s * Server) Subscribe(_ context.Context, request *pubsub.SubscribeRequest) (*pubsub.SubscribeResponse, error) {
 	subscription := s.pubsub.Subscribe(request.Topic)
 	go func() {
 		for {
@@ -53,6 +55,19 @@ func (s * Server) Subscribe(request *pubsub.SubscribeRequest, response pubsub.Pu
 				return
 			}
 			message := &pubsub.Message{Message: text}
+			s.messages <- message
+		}
+	}()
+	return &pubsub.SubscribeResponse{}, nil
+}
+
+func (s *Server) ReceiveMessages(_ *pubsub.ReceiveMessagesRequest, response pubsub.PubSub_ReceiveMessagesServer) error {
+	go func() {
+		for {
+			message, ok := <-s.messages
+			if !ok {
+				return
+			}
 			err := response.Send(message)
 			if err != nil {
 				return
@@ -62,8 +77,8 @@ func (s * Server) Subscribe(request *pubsub.SubscribeRequest, response pubsub.Pu
 	return nil
 }
 
-func (s * Server) Publish(_ context.Context, request *pubsub.PublishRequest) (*pubsub.PublishResponse, error) {
-	err := s.pubsub.Publish(request.Topic, request.Message)
+func (s * Server) Publish(_ context.Context, message *pubsub.Message) (*pubsub.PublishResponse, error) {
+	err := s.pubsub.Publish(message.Topic, message.Message)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, err.Error())
 	}

@@ -8,7 +8,7 @@ import (
 
 type Client struct {
 	connection grpc.ClientConnInterface
-	messages   chan *Message
+	messages   chan *pubsub.Message
 	client pubsub.PubSubClient
 }
 
@@ -17,38 +17,42 @@ func NewClient(address string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	messages := make(chan *Message)
+	messages := make(chan *pubsub.Message)
 	client := pubsub.NewPubSubClient(conn)
 
 	return &Client{conn, messages, client}, nil
 }
 
 func (c *Client) Publish(topic string, message string) error {
-	request := &pubsub.PublishRequest{Topic: topic, Message: message}
+	request := &pubsub.Message{Topic: topic, Message: message}
 	_, err := c.client.Publish(context.Background(),request)
 	return err
 }
 
-func (c *Client) Subscribe(topic string) error {
-	request := &pubsub.SubscribeRequest{Topic: topic}
-	response, err := c.client.Subscribe(context.Background(),request)
+func (c *Client) ReceiveMessages() error {
+	response, err := c.client.ReceiveMessages(context.Background(), &pubsub.ReceiveMessagesRequest{})
 	if err != nil {
 		return err
 	}
-
 	go func() {
 		for {
 			message, err := response.Recv()
 			if err != nil {
 				return
 			}
-			c.messages <- &Message{Topic: topic, Text: message.Message}
+			c.messages <- message
 		}
 	}()
 	return nil
 }
 
-func (c *Client) Messages() <-chan *Message {
+func (c *Client) Subscribe(topic string) error {
+	request := &pubsub.SubscribeRequest{Topic: topic}
+	_, err := c.client.Subscribe(context.Background(),request)
+	return err
+}
+
+func (c *Client) Messages() <-chan *pubsub.Message {
 	return c.messages
 }
 

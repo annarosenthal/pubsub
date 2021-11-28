@@ -3,6 +3,7 @@ package pubsub
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"pubsub/gen/pubsub"
 	"testing"
 	"time"
 )
@@ -27,7 +28,10 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	defer client.Close()
+	go func() {
+		defer client.Close()
+		client.ReceiveMessages()
+	}()
 
 	m.Run()
 }
@@ -59,7 +63,7 @@ func TestClient_Subscribe_Publish_WrongTopic(t *testing.T) {
 	}
 }
 
-func readMessage() *Message {
+func readMessage() *pubsub.Message {
 	select {
 	case msg := <-client.Messages():
 		return msg
@@ -71,5 +75,5 @@ func readMessage() *Message {
 func assertMessage(t *testing.T, topic string, message string) {
 	msg := readMessage()
 	assert.Equal(t, topic, msg.Topic)
-	assert.Equal(t, message, msg.Text)
+	assert.Equal(t, message, msg.Message)
 }
