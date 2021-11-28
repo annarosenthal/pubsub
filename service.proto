@@ -1,0 +1,29 @@
+syntax = "proto3";
+package pubsub;
+
+option go_package = "gen/pubsub";
+
+message SubscribeRequest {
+  string topic = 1;
+}
+
+message Message {
+  string message = 1;
+}
+
+message PublishRequest {
+  string topic = 1;
+  string message = 2;
+}
+
+message PublishResponse {
+}
+
+message SubscribeResponse {
+}
+
+service PubSub {
+  rpc Subscribe(SubscribeRequest) returns (Su Message) {}
+  rpc Publish(PublishRequest) returns (PublishResponse) {}
+}
+

@@ -1,57 +1,58 @@
 package pubsub
 
 import (
-	"net"
+	"context"
+	"google.golang.org/grpc"
 	"pubsub/gen/pubsub"
 )
 
 type Client struct {
-	connection net.Conn
-	pr         *ProtoReader
-	pw         *ProtoWriter
+	connection grpc.ClientConnInterface
 	messages   chan *Message
+	client pubsub.PubSubClient
 }
 
 func NewClient(address string) (*Client, error) {
-	conn, err := net.Dial("tcp", address)
+	conn, err := grpc.Dial(address, grpc.WithInsecure())
 	if err != nil {
 		return nil, err
 	}
 	messages := make(chan *Message)
-	client := &Client{conn, NewProtoReader(conn), NewProtoWriter(conn), messages}
+	client := pubsub.NewPubSubClient(conn)
 
-	return client, nil
+	return &Client{conn, messages, client}, nil
 }
 
 func (c *Client) Publish(topic string, message string) error {
-	return c.pw.Write(&pubsub.Command{Topic: topic, Message: message, Action: pubsub.Command_PUB})
+	request := &pubsub.PublishRequest{Topic: topic, Message: message}
+	_, err := c.client.Publish(context.Background(),request)
+	return err
 }
 
 func (c *Client) Subscribe(topic string) error {
-	return c.pw.Write(&pubsub.Command{Topic: topic, Action: pubsub.Command_SUB})
+	request := &pubsub.SubscribeRequest{Topic: topic}
+	response, err := c.client.Subscribe(context.Background(),request)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		for {
+			message, err := response.Recv()
+			if err != nil {
+				return
+			}
+			c.messages <- &Message{Topic: topic, Text: message.Message}
+		}
+	}()
+	return nil
 }
 
 func (c *Client) Messages() <-chan *Message {
 	return c.messages
 }
 
-func (c *Client) ProcessMessages() {
-	for {
-		var msg pubsub.Message
-		if err := c.pr.Read(&msg); err != nil {
-			return
-		} else {
-			c.handleMessage(&msg)
-		}
-	}
-}
-
 func (c *Client) Close() error {
 	close(c.messages)
-	return c.connection.Close()
-}
-
-func (c *Client) handleMessage(message *pubsub.Message) {
-
-	c.messages <- &Message{message.Topic, message.Message}
+	return nil
 }

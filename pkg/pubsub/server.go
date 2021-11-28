@@ -1,16 +1,19 @@
 package pubsub
 
 import (
+	"context"
 	"fmt"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"net"
+	"pubsub/gen/pubsub"
 )
 
-type ClientConnectionSet map[*ClientConnection]interface{}
-
 type Server struct {
+	pubsub.UnimplementedPubSubServer
 	listener net.Listener
 	pubsub   *PubSub
-	clients  ClientConnectionSet
 }
 
 func NewServer(port int) (*Server, error) {
@@ -18,18 +21,19 @@ func NewServer(port int) (*Server, error) {
 		return nil, err
 	} else {
 		return &Server{
+			pubsub.UnimplementedPubSubServer{},
 			listener,
 			NewPubSub(),
-			make(ClientConnectionSet),
 		}, nil
 	}
 }
 
-
 // Listen listens for new connections and processes commands from them
 func (s *Server) Listen() {
 	fmt.Printf("Listening on %s...\n", s.listener.Addr().String())
-	s.acceptConnections()
+	server := grpc.NewServer()
+	pubsub.RegisterPubSubServer(server, s)
+	server.Serve(s.listener)
 }
 
 // Close shuts down listener
@@ -40,28 +44,28 @@ func (s *Server) Close() error {
 	return nil
 }
 
-func (s *Server) acceptConnections() {
-	for {
-		if conn, err := s.listener.Accept(); err != nil {
-			return
-		} else {
-			fmt.Printf("client connected %s\n", conn.RemoteAddr())
-			client := s.newClient(conn)
-			go client.Run()
+func (s * Server) Subscribe(request *pubsub.SubscribeRequest, response pubsub.PubSub_SubscribeServer) error {
+	subscription := s.pubsub.Subscribe(request.Topic)
+	go func() {
+		for {
+			text, ok := <-subscription.Channel()
+			if !ok {
+				return
+			}
+			message := &pubsub.Message{Message: text}
+			err := response.Send(message)
+			if err != nil {
+				return
+			}
 		}
+	}()
+	return nil
+}
+
+func (s * Server) Publish(_ context.Context, request *pubsub.PublishRequest) (*pubsub.PublishResponse, error) {
+	err := s.pubsub.Publish(request.Topic, request.Message)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, err.Error())
 	}
-}
-
-func (s *Server) newClient(conn net.Conn) *ClientConnection {
-	client := newClient(conn, s.pubsub, s.clients.untrack)
-	s.clients.track(client)
-	return client
-}
-
-func (c ClientConnectionSet) track(client *ClientConnection) {
-	c[client] = nil
-}
-
-func (c ClientConnectionSet) untrack(client *ClientConnection) {
-	delete(c, client)
+	return &pubsub.PublishResponse{}, nil
 }

@@ -1,9 +1,0 @@
-syntax = "proto3";
-package pubsub;
-
-option go_package = "gen/pubsub";
-
-message Message {
-  string topic = 1;
-  string message = 2;
-}

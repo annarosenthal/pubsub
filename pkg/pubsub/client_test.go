@@ -27,10 +27,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	go func() {
-		defer client.Close()
-		client.ProcessMessages()
-	}()
+	defer client.Close()
 
 	m.Run()
 }
@@ -38,11 +35,9 @@ func TestMain(m *testing.M) {
 func TestClient_Subscribe_Publish(t *testing.T) {
 	err := client.Subscribe("topic")
 	assert.NoError(t, err)
-	assertMessage(t, "info", "subscribed to topic [topic]")
 
 	err = client.Publish("topic", "message")
 	assert.NoError(t, err)
-	assertMessage(t, "info", "published to topic [topic]")
 
 	assertMessage(t, Topic, TestMessage)
 }
