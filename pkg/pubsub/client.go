@@ -29,26 +29,24 @@ func (c *Client) Publish(topic string, message string) error {
 	return err
 }
 
-func (c *Client) ReceiveMessages() error {
-	response, err := c.client.ReceiveMessages(context.Background(), &pubsub.ReceiveMessagesRequest{})
+func (c *Client) Subscribe(topic string) error {
+	request := &pubsub.SubscribeRequest{Topic: topic}
+	response, err := c.client.Subscribe(context.Background(),request)
 	if err != nil {
 		return err
 	}
+	_, err = response.Recv()
+
 	go func() {
 		for {
-			message, err := response.Recv()
-			if err != nil {
+			if msg, err := response.Recv(); err != nil {
 				return
+			} else {
+				c.messages <- msg
 			}
-			c.messages <- message
+
 		}
 	}()
-	return nil
-}
-
-func (c *Client) Subscribe(topic string) error {
-	request := &pubsub.SubscribeRequest{Topic: topic}
-	_, err := c.client.Subscribe(context.Background(),request)
 	return err
 }
 

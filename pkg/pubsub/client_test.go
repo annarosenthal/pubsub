@@ -3,6 +3,8 @@ package pubsub
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"pubsub/gen/pubsub"
 	"testing"
 	"time"
@@ -28,10 +30,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	go func() {
-		defer client.Close()
-		client.ReceiveMessages()
-	}()
+	defer client.Close()
 
 	m.Run()
 }
@@ -49,11 +48,10 @@ func TestClient_Subscribe_Publish(t *testing.T) {
 func TestClient_Subscribe_Publish_WrongTopic(t *testing.T) {
 	err := client.Subscribe("topic")
 	assert.NoError(t, err)
-	assertMessage(t, "info", "subscribed to topic [topic]")
 
 	err = client.Publish("wrong", "message")
-	assert.NoError(t, err)
-	assertMessage(t, "error", "failed to publish to topic wrong because there are no subscribers")
+	assert.Error(t, err)
+	assertStatus(t, err, codes.InvalidArgument)
 
 	select {
 	case msg := <-client.Messages():
@@ -76,4 +74,10 @@ func assertMessage(t *testing.T, topic string, message string) {
 	msg := readMessage()
 	assert.Equal(t, topic, msg.Topic)
 	assert.Equal(t, message, msg.Message)
+}
+
+func assertStatus(t *testing.T, err error, code codes.Code) {
+	st, ok := status.FromError(err)
+	assert.True(t, ok)
+	assert.Equal(t, code, st.Code())
 }

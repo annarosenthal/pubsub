@@ -15,15 +15,8 @@ message Message {
 message PublishResponse {
 }
 
-message SubscribeResponse {
-}
-
-message ReceiveMessagesRequest {
-}
-
 service PubSub {
-  rpc Subscribe(SubscribeRequest) returns (SubscribeResponse) {}
+  rpc Subscribe(SubscribeRequest) returns (stream Message) {}
   rpc Publish(Message) returns (PublishResponse) {}
-  rpc ReceiveMessages(ReceiveMessagesRequest) returns (stream Message) {}
 }
 

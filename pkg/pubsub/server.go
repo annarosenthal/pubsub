@@ -14,7 +14,6 @@ type Server struct {
 	pubsub.UnimplementedPubSubServer
 	listener net.Listener
 	pubsub   *PubSub
-	messages   chan *pubsub.Message
 }
 
 func NewServer(port int) (*Server, error) {
@@ -25,17 +24,16 @@ func NewServer(port int) (*Server, error) {
 			pubsub.UnimplementedPubSubServer{},
 			listener,
 			NewPubSub(),
-			make(chan *pubsub.Message),
 		}, nil
 	}
 }
 
 // Listen listens for new connections and processes commands from them
-func (s *Server) Listen() {
+func (s *Server) Listen() error {
 	fmt.Printf("Listening on %s...\n", s.listener.Addr().String())
 	server := grpc.NewServer()
 	pubsub.RegisterPubSubServer(server, s)
-	server.Serve(s.listener)
+	return server.Serve(s.listener)
 }
 
 // Close shuts down listener
@@ -46,35 +44,21 @@ func (s *Server) Close() error {
 	return nil
 }
 
-func (s * Server) Subscribe(_ context.Context, request *pubsub.SubscribeRequest) (*pubsub.SubscribeResponse, error) {
+func (s * Server) Subscribe(request *pubsub.SubscribeRequest, response pubsub.PubSub_SubscribeServer) error {
 	subscription := s.pubsub.Subscribe(request.Topic)
-	go func() {
-		for {
-			text, ok := <-subscription.Channel()
-			if !ok {
-				return
-			}
-			message := &pubsub.Message{Message: text}
-			s.messages <- message
+	if err := response.Send(&pubsub.Message{}); err!= nil {
+		return err
+	}
+	for {
+		text, ok := <-subscription.Channel()
+		if !ok {
+			return nil
 		}
-	}()
-	return &pubsub.SubscribeResponse{}, nil
-}
-
-func (s *Server) ReceiveMessages(_ *pubsub.ReceiveMessagesRequest, response pubsub.PubSub_ReceiveMessagesServer) error {
-	go func() {
-		for {
-			message, ok := <-s.messages
-			if !ok {
-				return
-			}
-			err := response.Send(message)
-			if err != nil {
-				return
-			}
+		message := &pubsub.Message{Message: text, Topic: request.Topic}
+		if err := response.Send(message); err != nil {
+			return err
 		}
-	}()
-	return nil
+	}
 }
 
 func (s * Server) Publish(_ context.Context, message *pubsub.Message) (*pubsub.PublishResponse, error) {
