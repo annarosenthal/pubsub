@@ -6,6 +6,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"pubsub/gen/pubsub"
+	"pubsub/pkg/metrics"
 	"testing"
 	"time"
 )
@@ -17,7 +18,7 @@ var (
 
 func TestMain(m *testing.M) {
 	var err error
-	server, err = NewServer(12345)
+	server, err = NewServer(12345, WithCollector(&metrics.StdOutCollector{}))
 	if err != nil {
 		panic(err)
 	}

@@ -1,9 +1,13 @@
 package main
 
-import "pubsub/pkg/pubsub"
+import (
+	"pubsub/pkg/metrics"
+	"pubsub/pkg/pubsub"
+)
 
 func main() {
-	server, err := pubsub.NewServer(8081)
+	collector := &metrics.PrometheusCollector{}
+	server, err := pubsub.NewServer(8081, pubsub.WithCollector(collector))
 	if err != nil {
 		panic(err)
 	}
