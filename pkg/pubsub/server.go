@@ -25,13 +25,14 @@ func NewServer(port int, options ...ServerOption) (*Server, error) {
 	} else {
 		server := &Server{
 			pubsub.UnimplementedPubSubServer{},
-			listener,
+			nil,
 			NewPubSub(),
 			&metrics.DefaultCollector{},
 		}
 		for _, option := range options {
 			option(server)
 		}
+		server.listener = metrics.WrapListener(listener, server.collector)
 		return server, nil
 	}
 }
@@ -77,8 +78,11 @@ func (s * Server) Subscribe(request *pubsub.SubscribeRequest, response pubsub.Pu
 func (s * Server) Publish(_ context.Context, message *pubsub.Message) (*pubsub.PublishResponse, error) {
 	err := s.pubsub.Publish(message.Topic, message.Message)
 	if err != nil {
+		s.collector.Increment(metrics.PublishErrorCountMetric,tags(message.Topic))
 		return nil, status.Errorf(codes.InvalidArgument, err.Error())
 	}
+	s.collector.Increment(metrics.PublishCountMetric,tags(message.Topic))
+	s.collector.Record(metrics.PublishMessageSizeMetric,tags(message.Topic), float64(len(message.Message)))
 	return &pubsub.PublishResponse{}, nil
 }
 
