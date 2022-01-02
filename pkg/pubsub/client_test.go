@@ -18,7 +18,7 @@ var (
 
 func TestMain(m *testing.M) {
 	var err error
-	server, err = NewServer(12345, WithCollector(&metrics.StdOutCollector{}))
+	server, err = NewServer(8081, WithCollector(&metrics.StdOutCollector{}))
 	if err != nil {
 		panic(err)
 	}
@@ -27,7 +27,7 @@ func TestMain(m *testing.M) {
 		server.Listen()
 	}()
 
-	client, err = NewClient(":12345")
+	client, err = NewClient(":8081")
 	if err != nil {
 		panic(err)
 	}

@@ -1,0 +1,21 @@
+version: "3.8"
+services:
+  pubsub:
+    build:
+      context: .
+    ports:
+      - 8081:8081
+      - 9000:9000
+  grafana:
+    image: "grafana/grafana-oss"
+    ports:
+      - 3000:3000
+  prometheus:
+    image: "prom/prometheus"
+    volumes:
+    - "./prometheus.yml:/etc/prometheus/prometheus.yml"
+    command:
+    - "--config.file=/etc/prometheus/prometheus.yml"
+    ports:
+      - 9090:9090
+    restart: always
